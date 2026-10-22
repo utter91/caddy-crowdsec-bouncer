@@ -91,7 +91,19 @@ func (a *appsec) checkRequest(ctx context.Context, r *http.Request) error {
 	var contentLength = 0
 	switch {
 	case isBodyUnreadable(r):
-		a.logger.Warn("dropping request body from AppSec check as it can't be buffered")
+		// Unknown-length HTTP/2+ bodies may be endless bidirectional streams.
+		// Do not buffer them or silently forward them without body inspection.
+		// Finite clients can retry with Content-Length; response streaming and
+		// WebSocket upgrades are unaffected by this request-body policy.
+		// HTTP/3 can also use ContentLength=-1 for a bodiless request.
+		// Distinguish EOF from real body data without waiting indefinitely.
+		if !emptyUnknownLengthBody(ctx, r.Body, a.client.Timeout) {
+			return &AppSecError{
+				Err:        errors.New("AppSec requires Content-Length for HTTP/2 and HTTP/3 request bodies"),
+				Action:     "ban",
+				StatusCode: http.StatusLengthRequired,
+			}
+		}
 	case r.Body != nil && r.Body != http.NoBody && r.ContentLength != 0:
 		// a non-positive maxBodySize means no limit; only cap the read when set
 		bodyReader := io.Reader(r.Body)
@@ -211,6 +223,29 @@ func (a *appsec) checkRequest(ctx context.Context, r *http.Request) error {
 // This function was taken from https://github.com/maxlerebourg/crowdsec-bouncer-traefik-plugin/blob/main/bouncer.go#L735
 func isBodyUnreadable(httpReq *http.Request) bool {
 	return httpReq.Body != nil && httpReq.Body != http.NoBody && httpReq.ProtoMajor >= 2 && httpReq.ContentLength < 0
+}
+
+// emptyUnknownLengthBody probes one byte, rather than buffering an unknown
+// stream. Request body Close must unblock Read (the net/http server contract).
+// Stop and join the timeout callback before returning so it cannot close a body
+// after a successful check. Probe errors and canceled requests fail closed.
+func emptyUnknownLengthBody(ctx context.Context, body io.ReadCloser, timeout time.Duration) bool {
+	if timeout <= 0 {
+		timeout = 2 * time.Second
+	}
+	probeCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	done := make(chan struct{})
+	stop := context.AfterFunc(probeCtx, func() {
+		_ = body.Close()
+		close(done)
+	})
+	var probe [1]byte
+	n, err := io.ReadFull(body, probe[:])
+	if !stop() {
+		<-done
+	}
+	return n == 0 && err == io.EOF && probeCtx.Err() == nil
 }
 
 func (a *appsec) failOpenOrErr(err error) error {

@@ -21,6 +21,31 @@
   - [Things That Can Be Done](#things-that-can-be-done)
     - [Contributing](#contributing)
 
+## Local AppSec body policy
+
+This fork includes a fail-closed request-body policy based on upstream v0.14.1
+for the inspection omission described in
+[upstream issue #149](https://github.com/hslatman/caddy-crowdsec-bouncer/issues/149).
+
+When AppSec is enabled, nonempty HTTP/2 and HTTP/3 request bodies without
+`Content-Length` receive **411 Length Required** before reaching the backend.
+Empty unknown-length requests still proceed: a one-byte probe distinguishes EOF
+from body data, with the configured AppSec timeout (`appsec_max_timeout`, default
+2 seconds) bounding the wait. Read errors and timeouts fail closed. This policy
+also applies when `appsec_fail_open` is enabled and does not create an IP ban.
+
+Clients sending finite bodies should supply `Content-Length`. HTTP/1.1 chunked
+inspection, response streaming, and WebSocket upgrades retain their existing
+behavior. Genuine indefinite request streams, including bidirectional gRPC,
+are rejected by this policy; this fork adds no streaming-route exemption and
+does not provide inspection of those unknown-length bodies.
+
+The change includes regression tests for empty requests, request-body
+compatibility, fail-closed behavior, timeout, and cancellation. Additional
+isolated tests on Caddy 2.11.7 covered uploads, response streaming, range requests,
+and WebSocket frames across HTTP/1.1, HTTP/2, and HTTP/3. Those protocol checks
+used a mock AppSec endpoint, not a real CrowdSec ruleset.
+
 ## Description
 
 The Caddy CrowdSec Bouncer consists of five components:

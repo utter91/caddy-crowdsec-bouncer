@@ -12,18 +12,18 @@
     - [What is CrowdSec?](#what-is-crowdsec)
   - [Usage](#usage)
     - [Option 1: Docker Build](#option-1-docker-build)
-    - [Option 2: Custom Go Build (xcaddy)](#option-2-custom-go-build-xcaddy)
+    - [Option 2: Custom Go Build](#option-2-custom-go-build)
     - [Configuration](#configuration)
   - [Demo](#demo)
   - [Utilities](#utilities)
     - [Usage](#usage-1)
   - [Client IP](#client-ip)
   - [Things That Can Be Done](#things-that-can-be-done)
-    - [Contributing](#contributing)
+  - [Contributing](#contributing)
 
 ## Local AppSec body policy
 
-This fork includes a fail-closed request-body policy based on upstream v0.14.1
+This fork adds a fail-closed request-body policy to upstream `main`
 for the inspection omission described in
 [upstream issue #149](https://github.com/hslatman/caddy-crowdsec-bouncer/issues/149).
 
@@ -68,7 +68,7 @@ Bouncers are pieces of software that perform specific actions based on the decis
 ## Usage
 
 > [!TIP]
-> You can find full setup examples in /examples inside this repository.
+> You can find full setup examples at [`examples`](/examples)
 
 You can use the bouncer by either building a custom Caddy image with Docker or by fetching the required Go modules directly into your own build.
 
@@ -130,6 +130,23 @@ Configuration using a Caddyfile is supported for HTTP handlers and Layer 4 match
 | `appsec_max_timeout`.   | Maximum time for request to AppSec component.                                                                                                                       | `2s`                     |
 | `appsec_fail_open`      | Ignore AppSec component connection errors.                                                                                                                          | `false`                  |
 | `enable_caddy_error`    | Propagates decisions as Caddy errors to allow custom error pages. **Warning:** Ensure `handle_errors` routes are strictly static to avoid resource exhaustion (DoS).| `false`                  |
+
+#### Variables
+
+When a request is blocked, the HTTP and AppSec handlers record why in the request context, so that Caddyfile matchers and logs can tell blocks apart:
+
+| Variable                           | Description                           | Examples                          |
+|------------------------------------|---------------------------------------|-----------------------------------|
+| `{http.vars.crowdsec.module}`      | The handler that blocked the request. | `http`, `appsec`                  |
+| `{http.vars.crowdsec.remediation}` | The remediation that was applied.     | `ban`, `captcha`, `throttle`      |
+| `{http.vars.crowdsec.origin}`      | The origin of the decision            | `appsec`, `crowdsec`, `lists:foo` |
+| `{http.vars.crowdsec.duration}`    | The duration of the decision.         | `3h59m58s`                        |
+
+```Caddyfile
+handle_errors {
+  log_append blocked-by {http.vars.crowdsec.module}
+}
+```
 
 #### Example
 

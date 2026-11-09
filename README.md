@@ -23,6 +23,14 @@
 
 ## Local AppSec body policy
 
+This fork includes upstream **v0.15.0** (commit `4a6ce1d`) as of 9 November
+2026. Its default branch, `fix/appsec-unknown-length-fail-closed`, retains the
+additional policy below; the upstream release tags do not contain that patch.
+Build this branch (or a tested commit on it) using xcaddy's `--replace` option.
+The CI workflow tests both this branch and `main`, including race detection and
+the upstream end-to-end suite. Future upstream releases still need to be merged
+and tested; this fork does not update itself automatically.
+
 This fork adds a fail-closed request-body policy to upstream `main`
 for the inspection omission described in
 [upstream issue #149](https://github.com/hslatman/caddy-crowdsec-bouncer/issues/149).

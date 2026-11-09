@@ -98,14 +98,14 @@ func TestAppSecEmptyUnknownBody(t *testing.T) {
 }
 func TestAppSecUnknownStreamTimeout(t *testing.T) {
 	r, w := io.Pipe()
-	defer w.Close()
+	t.Cleanup(func() { require.NoError(t, w.Close()) })
 	started := time.Now()
 	require.False(t, emptyUnknownLengthBody(t.Context(), r, 20*time.Millisecond))
 	require.Less(t, time.Since(started), time.Second)
 }
 func TestAppSecUnknownProbeContextCanceled(t *testing.T) {
 	r, w := io.Pipe()
-	defer w.Close()
+	t.Cleanup(func() { require.NoError(t, w.Close()) })
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	require.False(t, emptyUnknownLengthBody(ctx, r, time.Second))

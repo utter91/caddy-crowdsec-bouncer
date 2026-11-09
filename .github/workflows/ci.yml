@@ -1,6 +1,7 @@
 name: Test
 
 on:
+  workflow_dispatch:
   push:
     branches: [ main, fix/appsec-unknown-length-fail-closed ]
   pull_request:
